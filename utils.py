@@ -5,6 +5,11 @@ import matplotlib.pyplot as plt
 import pykitti
 import os
 import open3d as o3d
+import shutil
+import struct
+
+
+from pathlib import Path
 
 # print(os.getcwd())
 
@@ -201,10 +206,7 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
 
     #o3d.visualization.draw_geometries([pcd])
 
-    visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map,rgbd_image,True)
-    
-
-
+    #visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map,rgbd_image,True)
 
     return pcd
 
@@ -238,6 +240,47 @@ def write_pointcloud(filename,xyz_points,rgb_points=None):
                                         rgb_points[i,0].tostring(),rgb_points[i,1].tostring(),
                                         rgb_points[i,2].tostring())))
     fid.close()
+
+
+def conver_bin_file_cloudPoint(directoryPath):
+    ## setting up the output directory
+    folder = "output"
+    path = os.path.join( os.getcwd() , folder )
+
+    if not os.path.exists(os.path.dirname(path)):
+        os.makedirs(path)
+    else:
+        shutil.rmtree(path)
+        os.makedirs(path)
+
+
+    entries = Path(directoryPath)
+    for entry in entries.iterdir():
+        #print(entry.name)
+        path = directoryPath+"/"+entry.name
+
+        # print(path)
+
+        bin_pcd = np.fromfile(path, dtype=np.float32)
+
+        #Reshape and drop reflection values
+        points = bin_pcd.reshape((-1, 4))[:, 0:3]
+
+        #Reshape and include the reflection values
+        points = bin_pcd.reshape((-1, 4))[:, 0:3]
+
+        # Convert to Open3D point cloud
+        o3d_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
+
+        name,_ = entry.name.split(".")
+        file_path = "/media/ammar/eecs_ammar/Kitti/2011_09_26/2011_09_26_drive_0009_sync/velodyne_points/"+"output/"+name+".ply"
+        print(path)
+        print(name)
+        o3d.io.write_point_cloud(file_path, o3d_pcd)
+
+
+
+
 
 def visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map, rgbd = None,withOutRGBD =False):
     
