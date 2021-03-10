@@ -7,6 +7,7 @@ import os
 import open3d as o3d
 import shutil
 import struct
+import time
 
 
 from pathlib import Path
@@ -173,8 +174,8 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
     # ** Note add Externsic parameters below
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_raw, depth_raw)
 
-    print("RGBD information:")
-    print(rgbd_image)
+    # print("RGBD information:")
+    # print(rgbd_image)
 
     cam = o3d.camera.PinholeCameraIntrinsic()
     cam.intrinsic_matrix =  camera_intrinsic_para
@@ -202,7 +203,6 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
     pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
     #print(pcd)
-
 
     #o3d.visualization.draw_geometries([pcd])
 
@@ -279,9 +279,6 @@ def conver_bin_file_cloudPoint(directoryPath):
         o3d.io.write_point_cloud(file_path, o3d_pcd)
 
 
-
-
-
 def visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map, rgbd = None,withOutRGBD =False):
     
     plt.figure(figsize=(20,10))
@@ -344,18 +341,16 @@ def write_ply(fn, verts, colors):
         f.write((ply_header % dict(vert_num=len(verts))).encode('utf-8'))
         np.savetxt(f, verts, fmt='%f %f %f %d %d %d ')
 
-
-
 def cv_pointcloud_from_stereo(dataset,frameNumber):
 
     print('loading images...')
 
-    #imgL = cv2.pyrDown(np.array(dataset.get_cam2(frameNumber)))
-    #imgR = cv2.pyrDown(np.array(dataset.get_cam3(frameNumber)))
+    imgL = cv2.pyrDown(np.array(dataset.get_cam2(frameNumber)))
+    imgR = cv2.pyrDown(np.array(dataset.get_cam3(frameNumber)))
 
-    imgL = cv2.pyrDown(cv2.imread(cv2.samples.findFile('left.png')))  # downscale images for faster processing
-    imgR = cv2.pyrDown(cv2.imread(cv2.samples.findFile('right.png')))
-
+    # imgL = cv2.pyrDown(cv2.imread(cv2.samples.findFile('left.png')))  # downscale images for faster processing
+    # imgR = cv2.pyrDown(cv2.imread(cv2.samples.findFile('right.png')))
+    #
 
     # disparity range is tuned for 'aloe' image pair
     window_size = 3
@@ -380,7 +375,7 @@ def cv_pointcloud_from_stereo(dataset,frameNumber):
     
     f = 0.8*w                          # guess for focal length
     
-    #f = k_[0, 0]
+    # f = k_[0, 0]
 
 
     Q = np.float32([[1, 0, 0, -0.5*w],
@@ -395,13 +390,12 @@ def cv_pointcloud_from_stereo(dataset,frameNumber):
     cloudpoint = points[mask]
     cloudpoint_color = colors[mask]
 
-    print("cloudpoint_data")
-    print(type(cloudpoint))
-    
-    print("cloudpoint_color_data")
-    print(type(cloudpoint_color))
-    
-    
+    # print("cloudpoint_data")
+    # print(type(cloudpoint))
+    #
+    # print("cloudpoint_color_data")
+    # print(type(cloudpoint_color))
+
     #cv2.imshow('left', imgL)
     #cv2.imshow('right',imgR)
     #cv2.imshow('disparity', (disp-min_disp)/num_disp)
@@ -410,3 +404,63 @@ def cv_pointcloud_from_stereo(dataset,frameNumber):
     #visualize(imgL,imgR,disparity_map,depth_map,None)
 
     return cloudpoint , cloudpoint_color
+
+def generate_pointcloud_from_stere(destinationPath,kitti_dateset,Library = None):
+
+        if not os.path.exists(destinationPath):
+            os.makedirs(destinationPath)
+        else:
+            shutil.rmtree(destinationPath)
+            os.makedirs(destinationPath)
+
+        # get total number of frames
+        frames = kitti_dateset.__len__()
+
+        # initialize parameter for open3d visualization
+        pcd = o3d.geometry.PointCloud()
+        vis = o3d.visualization.Visualizer()
+        vis.create_window()
+        vis.add_geometry(pcd)
+
+        render_option = vis.get_render_option()
+        render_option.point_size = 0.01
+        to_reset_view_point = True
+
+        if Library is None or Library == "open3d":
+            ## Generating Pointclouds from Stere Images using open3D library
+            # Note ! The below code write saves the point cloud in .ply for
+            # also but with no intensity values. Open3D supports standard
+            # format with not intensity pointlcoud values.
+            print("open3d Block called")
+            for frameNumber in range(0, frames, 1):
+                stereCloud = pointcloud_from_StereoImage_kitti(frameNumber, kitti_dateset)
+                pcd.points = stereCloud.points
+                status = vis.update_geometry(pcd)
+
+                if to_reset_view_point:
+                    vis.reset_view_point(True)
+                    to_reset_view_point = False
+                vis.poll_events()
+                vis.update_renderer()
+                time.sleep(0.2)
+
+
+                ## writing to a folder
+                #file_path = destinationPath + "/0000" + str(frameNumber) + ".ply"
+                #o3d.io.write_point_cloud(file_path, pcd)
+
+        elif Library=="opencv":
+            print("openCV Block called")
+            for frameNumber in range(0, frames, 1):
+                pcd, pcd_color = cv_pointcloud_from_stereo(kitti_dateset, frameNumber)
+                file_path = destinationPath + "/0000" + str(frameNumber) + ".ply"
+                write_ply(file_path, pcd, pcd_color)
+
+        else:
+            return
+
+        vis.destroy_window()
+
+
+
+

@@ -1,10 +1,11 @@
 # from utils import *
 
 import utils
-import open3d as o3d
+import open3d
 import os
 import shutil
-
+import pykitti
+import time
 import numpy as np
 
 def main():
@@ -23,38 +24,12 @@ def main():
 
 
     ## converting BIN file to PLY
-    ##
     # directoryPath = "/media/ammar/eecs_ammar/Kitti/2011_09_26/2011_09_26_drive_0009_sync/velodyne_points/data"
     # utils.conver_bin_file_cloudPoint(directoryPath)
 
 
-
-    if not os.path.exists(os.path.dirname(path)):
-        os.makedirs(path)
-    else:
-        shutil.rmtree(path)
-        os.makedirs(path)
-
-    frames = dataset.__len__()
-
-    for frameNumber in range(0, frames, 1):
-
-        ## Generate Cloudpoints from Stereo Images
-        file_path = path + "/0000" + str(frameNumber) + ".ply"
-        pcd = utils.pointcloud_from_StereoImage_kitti(frameNumber,dataset)
-        o3d.io.write_point_cloud(file_path, pcd)
-
-
-
-
-        pcd , pcd_color = utils.cv_pointcloud_from_stereo(dataset,frameNumber)
-    #     #utils.write_ply(out_fn, pcd, pcd_color)
-    #     #print('%s saved' % out_fn)
-
-    # o3d.io.write_point_cloud("copy_of_fragment.ply", previous_pcd)
-
-
-
+    ## use the "opencv" or "open3d" library to generate pointcloud data
+    utils.generate_pointcloud_from_stere(path,dataset,"open3d")
 
 
 
