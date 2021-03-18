@@ -87,11 +87,9 @@ def depth_from_disparity(disparity,k_=None,t_=None,focal_length=None):
     
     # Get the focal length from the K matrix
 
-
     #f = k_[0, 0]
 
-
-    if k_.all() != None:
+    if k_.any()!= None:
         f = k_[0, 0]
     
     if focal_length != None:
@@ -143,7 +141,9 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
     #print(img_left_grey.shape)
 
     disparaity_map = compute_disparity_map(img_left_grey, img_right_grey,stereo_matcher_SGBM)
-    
+
+
+
     # Read the calibration 
     # As the P matrix is the combination intrinsic parameters 𝐾  and the extrinsic rotation 𝑅,
     # and translation t as follows:   
@@ -174,6 +174,7 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
     # ** Note add Externsic parameters below
     rgbd_image = o3d.geometry.RGBDImage.create_from_color_and_depth(color_raw, depth_raw)
 
+
     # print("RGBD information:")
     # print(rgbd_image)
 
@@ -186,27 +187,22 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
     #cam.extrinsic = np.array([[1., 0., 0., 0.], [0., 1., 0., 0.], [0., 0., 1., 0.], [0., 0., 0., 1.]])
     extrinsic_para = np.array([[1., 0., 0., 0.], [0., -1., 0., 0.], [0., 0., 0., 0.], [0., 0., 1., 0.]])
 
-
-    #print("Camera Intrinsic parameters")
-    #print(cam.intrinsic_matrix)
-
-    #print("CV demonposition method")
-    #print(camera_trans_para)
-
-    
     pcd = o3d.geometry.PointCloud.create_from_rgbd_image( rgbd_image, o3d.camera.PinholeCameraIntrinsic(cam))
-    
     #pcd = o3d.geometry.PointCloud.create_from_rgbd_image( rgbd_image, cam.intrinsic,cam.extrinsic )
     
+    clout = o3d.geometry.PointCloud()
 
     # Flip it, otherwise the pointcloud will be upside down
     pcd.transform([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]])
 
-    #print(pcd)
-
-    #o3d.visualization.draw_geometries([pcd])
-
     #visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map,rgbd_image,True)
+
+
+    # adding RGB color to cloud points
+    # colors = cv2.cvtColor(img_left_rgb, cv2.COLOR_BGR2RGB)
+    mask = disparaity_map > disparaity_map.min()
+    cloudpoint_color = img_left_rgb[mask]
+    pcd.colors = o3d.utility.Vector3dVector(cloudpoint_color)
 
     return pcd
 
@@ -285,37 +281,42 @@ def visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map, rgbd = None,w
 
     plt.subplot(3, 2, 1)
     plt.title('Left RGB image')
+    plt.axis("off")
     plt.imshow(img_left_rgb)
-    plt.colorbar()
+    #plt.colorbar()
 
 
     plt.subplot(3, 2, 2)
     plt.title('Right RGB image')
+    plt.axis("off")
     plt.imshow(img_right_rgb)
-    plt.colorbar()
+    #plt.colorbar()
     
-    
+    #
     plt.subplot(3, 2, 3)
     plt.title('Disparity Map')
-    plt.imshow(disparaity_map)
-    plt.colorbar()
-
-
-    plt.subplot(3, 2, 4)
+    plt.axis("off")
+    plt.imshow(disparaity_map,cmap ="plasma")
+    #plt.colorbar()
+    #
+    #
+    plt.subplot(3, 2, 4)  # viridis
     plt.title('Depth Estimation Map')
-    plt.imshow(depth_map)
-    plt.colorbar()
+    plt.imshow(depth_map, cmap ="plasma")
+    #plt.colorbar()
 
     if withOutRGBD == True: 
         plt.subplot(3, 2, 5)
         plt.title('RGBD color Map')
+        plt.axis("off")
         plt.imshow(rgbd.color)
-        plt.colorbar()
-            
+        #plt.colorbar()
         plt.subplot(3, 2, 6)
         plt.title('RGBD Depth Map')
-        plt.imshow(rgbd.depth)
-        plt.colorbar()
+        plt.axis("off")
+        plt.imshow(rgbd.depth, cmap ="plasma")
+        #plt.colorbar()
+
 
     #plt.show()
     plt.savefig('3D_scene_images.png')
@@ -372,12 +373,8 @@ def cv_pointcloud_from_stereo(dataset,frameNumber):
 
     print('generating 3d point cloud...',)
     h, w = imgL.shape[:2]
-    
-    f = 0.8*w                          # guess for focal length
-    
-    # f = k_[0, 0]
-
-
+    # f = 0.8*w                          # guess for focal length
+    f = 721.5377
     Q = np.float32([[1, 0, 0, -0.5*w],
                     [0,-1, 0,  0.5*h], # turn points 180 deg around x-axis,
                     [0, 0, 0,     -f], # so that y-axis looks up
@@ -390,22 +387,17 @@ def cv_pointcloud_from_stereo(dataset,frameNumber):
     cloudpoint = points[mask]
     cloudpoint_color = colors[mask]
 
-    # print("cloudpoint_data")
-    # print(type(cloudpoint))
-    #
-    # print("cloudpoint_color_data")
-    # print(type(cloudpoint_color))
-
     #cv2.imshow('left', imgL)
     #cv2.imshow('right',imgR)
     #cv2.imshow('disparity', (disp-min_disp)/num_disp)
-    #depth_map = depth_from_disparity((disp-min_disp)/num_disp,None,None,f)
-    #disparity_map = disp
-    #visualize(imgL,imgR,disparity_map,depth_map,None)
+
+    depth_map = depth_from_disparity((disp-min_disp)/num_disp,None,None,f)
+    disparity_map = disp
+    visualize(imgL,imgR,disparity_map,depth_map,None)
 
     return cloudpoint , cloudpoint_color
 
-def generate_pointcloud_from_stere(destinationPath,kitti_dateset,Library = None):
+def generate_pointcloud_from_stere(destinationPath,kitti_dateset,Library = None, writepcd = None):
 
         if not os.path.exists(destinationPath):
             os.makedirs(destinationPath)
@@ -418,13 +410,14 @@ def generate_pointcloud_from_stere(destinationPath,kitti_dateset,Library = None)
 
         # initialize parameter for open3d visualization
         pcd = o3d.geometry.PointCloud()
-        vis = o3d.visualization.Visualizer()
-        vis.create_window()
-        vis.add_geometry(pcd)
 
-        render_option = vis.get_render_option()
-        render_option.point_size = 0.01
-        to_reset_view_point = True
+        # Disable Open 3D viusalization
+        # vis = o3d.visualization.Visualizer()
+        # vis.create_window()
+        # vis.add_geometry(pcd)
+        # render_option = vis.get_render_option()
+        # render_option.point_size = 0.01
+        # to_reset_view_point = True
 
         if Library is None or Library == "open3d":
             ## Generating Pointclouds from Stere Images using open3D library
@@ -435,31 +428,38 @@ def generate_pointcloud_from_stere(destinationPath,kitti_dateset,Library = None)
             for frameNumber in range(0, frames, 1):
                 stereCloud = pointcloud_from_StereoImage_kitti(frameNumber, kitti_dateset)
                 pcd.points = stereCloud.points
-                status = vis.update_geometry(pcd)
+                pcd.colors = stereCloud.colors
 
-                if to_reset_view_point:
-                    vis.reset_view_point(True)
-                    to_reset_view_point = False
-                vis.poll_events()
-                vis.update_renderer()
-                time.sleep(0.2)
+                # Disable open 3D visualization Corresponsing to 401 line
+                #status = vis.update_geometry(pcd)
+                # if to_reset_view_point:
+                #     vis.reset_view_point(True)
+                #     to_reset_view_point = False
+                # vis.poll_events()
+                # vis.update_renderer()
+                # time.sleep(0.2)
 
-
-                ## writing to a folder
-                #file_path = destinationPath + "/0000" + str(frameNumber) + ".ply"
-                #o3d.io.write_point_cloud(file_path, pcd)
+                if writepcd:
+                    ## writing to a folder
+                    file_path = destinationPath + "/0000" + str(frameNumber) + ".ply"
+                    # o3d.io.write_point_cloud(file_path, pcd)
+                    xyz_point = np.asarray(pcd.points)
+                    rgb_point = np.asarray(pcd.colors)
+                    write_ply(file_path, xyz_point,rgb_point )
 
         elif Library=="opencv":
             print("openCV Block called")
             for frameNumber in range(0, frames, 1):
                 pcd, pcd_color = cv_pointcloud_from_stereo(kitti_dateset, frameNumber)
-                file_path = destinationPath + "/0000" + str(frameNumber) + ".ply"
-                write_ply(file_path, pcd, pcd_color)
+                if writepcd:
+                    file_path = destinationPath + "/0000" + str(frameNumber) + ".ply"
+                    write_ply(file_path, pcd, pcd_color)
 
         else:
             return
 
-        vis.destroy_window()
+        # Disable Open3D visualization Refer to line 401
+        #vis.destroy_window()
 
 
 
