@@ -21,6 +21,7 @@ def main():
     dataset = utils.load_dataset(basedir, date, drive, True)
     save_result_directory = date + "_" + drive + "_stereo_cloud"
     path = os.path.join(os.getcwd(), save_result_directory)
+    #print (dataset.calib.P_rect_00)
 
 
     ## converting BIN file to PLY
@@ -29,7 +30,8 @@ def main():
 
 
     ## use the "opencv" or "open3d" library to generate pointcloud data
-    utils.generate_pointcloud_from_stere(path,dataset,"open3d")
+    #utils.generate_pointcloud_from_stere(path,dataset,"opencv",False)
+    utils.generate_pointcloud_from_stere(path, dataset,"open3d", False)
 
 
 
