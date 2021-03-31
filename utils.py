@@ -11,8 +11,8 @@ import time
 
 
 from pathlib import Path
-
-# print(os.getcwd())
+from utilityPackage import parseTrackletXML as xmlParser
+print(os.getcwd())
 
 
 # load dataset with pykitti
@@ -50,6 +50,138 @@ def load_dataset(basedir, date, drive, calibrated=False, frame_range=None):
     #    print('\nRGB stereo pair baseline [m]: ' + str(dataset.calib.b_rgb))
 
     return dataset
+
+def load_tracklets_for_frames(n_frames, xml_path):
+    """
+    Loads dataset labels also referred to as tracklets, saving them individually for each frame.
+
+    Parameters
+    ----------
+    n_frames    : Number of frames in the dataset.
+    xml_path    : Path to the tracklets XML.
+
+    Returns
+    -------
+    Tuple of dictionaries with integer keys corresponding to absolute frame numbers and arrays as values. First array
+    contains coordinates of bounding box vertices for each object in the frame, and the second array contains objects
+    types as strings.
+    """
+    tracklets = xmlParser.parseXML(xml_path)
+
+    frame_tracklets = {}
+    frame_tracklets_types = {}
+    for i in range(n_frames):
+        frame_tracklets[i] = []
+        frame_tracklets_types[i] = []
+
+    # loop over tracklets
+    for i, tracklet in enumerate(tracklets):
+        # this part is inspired by kitti object development kit matlab code: computeBox3D
+        h, w, l = tracklet.size
+        # in velodyne coordinates around zero point and without orientation yet
+        trackletBox = np.array([
+            [-l / 2, -l / 2, l / 2, l / 2, -l / 2, -l / 2, l / 2, l / 2],
+            [w / 2, -w / 2, -w / 2, w / 2, w / 2, -w / 2, -w / 2, w / 2],
+            [0.0, 0.0, 0.0, 0.0, h, h, h, h]
+        ])
+        # loop over all data in tracklet
+        for translation, rotation, state, occlusion, truncation, amtOcclusion, amtBorders, absoluteFrameNumber in tracklet:
+            # determine if object is in the image; otherwise continue
+            if truncation not in (xmlParser.TRUNC_IN_IMAGE, xmlParser.TRUNC_TRUNCATED):
+                continue
+            # re-create 3D bounding box in velodyne coordinate system
+            yaw = rotation[2]  # other rotations are supposedly 0
+            assert np.abs(rotation[:2]).sum() == 0, 'object rotations other than yaw given!'
+            rotMat = np.array([
+                [np.cos(yaw), -np.sin(yaw), 0.0],
+                [np.sin(yaw), np.cos(yaw), 0.0],
+                [0.0, 0.0, 1.0]
+            ])
+            cornerPosInVelo = np.dot(rotMat, trackletBox) + np.tile(translation, (8, 1)).T
+
+            # frame_tracklets[absoluteFrameNumber] = frame_tracklets[absoluteFrameNumber] + [cornerPosInVelo]
+            # frame_tracklets_types[absoluteFrameNumber] = frame_tracklets_types[absoluteFrameNumber] + [
+            #     tracklet.objectType]
+
+            if absoluteFrameNumber in frame_tracklets:
+                frame_tracklets[absoluteFrameNumber] += [cornerPosInVelo]
+                frame_tracklets[absoluteFrameNumber] += [tracklet.objectType]
+            else:
+                frame_tracklets_types[absoluteFrameNumber] = [cornerPosInVelo]
+                frame_tracklets_types[absoluteFrameNumber] = [tracklet.objectType]
+
+    return (frame_tracklets, frame_tracklets_types)
+
+
+def velo_2_img_projection(points):
+        """ convert velodyne coordinates to camera image coordinates """
+
+        # rough velodyne azimuth range corresponding to camera horizontal fov
+        if h_fov is None:
+            h_fov = (-50, 50)
+        if h_fov[0] < -50:
+            h_fov = (-50,) + h_fov[1:]
+        if h_fov[1] > 50:
+            h_fov = h_fov[:1] + (50,)
+
+        # R_vc = Rotation matrix ( velodyne -> camera )
+        # T_vc = Translation matrix ( velodyne -> camera )
+        R_vc, T_vc = calib_velo2cam()
+
+        # P_ = Projection matrix ( camera coordinates 3d points -> image plane 2d points )
+        P_ = calib_cam2cam()
+
+        """
+        xyz_v - 3D velodyne points corresponding to h, v FOV limit in the velodyne coordinates
+        c_    - color value(HSV's Hue vaule) corresponding to distance(m)
+                 [x_1 , x_2 , .. ]
+        xyz_v =  [y_1 , y_2 , .. ]
+                 [z_1 , z_2 , .. ]
+                 [ 1  ,  1  , .. ]
+        """
+        xyz_v, c_ = point_matrix(points)
+
+        """
+        RT_ - rotation matrix & translation matrix
+            ( velodyne coordinates -> camera coordinates )
+                [r_11 , r_12 , r_13 , t_x ]
+        RT_  =  [r_21 , r_22 , r_23 , t_y ]
+                [r_31 , r_32 , r_33 , t_z ]
+        """
+        RT_ = np.concatenate((R_vc, T_vc), axis=1)
+
+        # convert velodyne coordinates(X_v, Y_v, Z_v) to camera coordinates(X_c, Y_c, Z_c)
+        for i in range(xyz_v.shape[1]):
+            xyz_v[:3, i] = np.matmul(RT_, xyz_v[:, i])
+
+        """
+        xyz_c - 3D velodyne points corresponding to h, v FOV in the camera coordinates
+                 [x_1 , x_2 , .. ]
+        xyz_c =  [y_1 , y_2 , .. ]
+                 [z_1 , z_2 , .. ]
+        """
+        xyz_c = np.delete(xyz_v, 3, axis=0)
+
+        # convert camera coordinates(X_c, Y_c, Z_c) image(pixel) coordinates(x,y)
+        for i in range(xyz_c.shape[1]):
+            xyz_c[:, i] = np.matmul(P_, xyz_c[:, i])
+
+        """
+        xy_i - 3D velodyne points corresponding to h, v FOV in the image(pixel) coordinates before scale adjustment
+        ans  - 3D velodyne points corresponding to h, v FOV in the image(pixel) coordinates
+                 [s_1*x_1 , s_2*x_2 , .. ]
+        xy_i =   [s_1*y_1 , s_2*y_2 , .. ]        ans =   [x_1 , x_2 , .. ]
+                 [  s_1   ,   s_2   , .. ]                [y_1 , y_2 , .. ]
+        """
+        xy_i = xyz_c[::] / xyz_c[::][2]
+        ans = np.delete(xy_i, 2, axis=0)
+
+        return ans, c_
+
+
+
+
+
 
 
 # set stereo Settings
