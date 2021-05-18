@@ -15,7 +15,7 @@ from utilityPackage.kitti_object import kitti_object, show_lidar_with_depth, sho
 
 
 def main():
-    pass
+    # pass
     #load dataset
 
     # Path for Kitti Dataset
@@ -32,16 +32,16 @@ def main():
 
 
 
-    ## converting BIN file to PLY
-    #save_result_directory = date + "_" + drive + "_stereo_cloud"
-    #path = os.path.join(os.getcwd(), save_result_directory)
-    # directoryPath = "/media/ammar/eecs_ammar/Kitti/2011_09_26/2011_09_26_drive_0009_sync/velodyne_points/data"
-    # utils.conver_bin_file_cloudPoint(directoryPath)
+    # # converting BIN file to PLY "
+    save_result_directory = date + "_" + drive + "_stereo_cloud"
+    path = os.path.join(os.getcwd(), save_result_directory)
+    directoryPath = "/media/ammar/eecs_ammar/Kitti/2011_09_26/2011_09_26_drive_0009_sync/velodyne_points/data"
+    utils.conver_bin_file_cloudPoint(directoryPath)
 
 
     ## use the "opencv" or "open3d" library to generate pointcloud data
-    utils.generate_pointcloud_from_stere(path,dataset,"opencv",False)
-    #utils.generate_pointcloud_from_stere(path, dataset,"open3d", False)
+    #utils.generate_pointcloud_from_stere(path,dataset,"opencv",False)
+    # utils.generate_pointcloud_from_stere(path, dataset,"open3d", False)
 
 
 

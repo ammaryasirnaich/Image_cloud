@@ -8,6 +8,7 @@ import open3d as o3d
 import shutil
 import struct
 import time
+import laspy
 
 
 from pathlib import Path
@@ -338,44 +339,13 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
 
     return pcd
 
-def write_pointcloud(filename,xyz_points,rgb_points=None):
-
-    """ creates a .pkl file of the point clouds generated
-
-    """
-
-    assert xyz_points.shape[1] == 3,'Input XYZ points should be Nx3 float array'
-    if rgb_points is None:
-        rgb_points = np.ones(xyz_points.shape).astype(np.uint8)*255
-    assert xyz_points.shape == rgb_points.shape,'Input RGB colors should be Nx3 float array and have same size as input XYZ points'
-
-    # Write header of .ply file
-    fid = open(filename,'wb')
-    fid.write(bytes('ply\n', 'utf-8'))
-    fid.write(bytes('format binary_little_endian 1.0\n', 'utf-8'))
-    fid.write(bytes('element vertex %d\n'%xyz_points.shape[0], 'utf-8'))
-    fid.write(bytes('property float x\n', 'utf-8'))
-    fid.write(bytes('property float y\n', 'utf-8'))
-    fid.write(bytes('property float z\n', 'utf-8'))
-    fid.write(bytes('property uchar red\n', 'utf-8'))
-    fid.write(bytes('property uchar green\n', 'utf-8'))
-    fid.write(bytes('property uchar blue\n', 'utf-8'))
-    fid.write(bytes('end_header\n', 'utf-8'))
-
-    # Write 3D points to .ply file
-    for i in range(xyz_points.shape[0]):
-        fid.write(bytearray(struct.pack("fffccc",xyz_points[i,0],xyz_points[i,1],xyz_points[i,2],
-                                        rgb_points[i,0].tostring(),rgb_points[i,1].tostring(),
-                                        rgb_points[i,2].tostring())))
-    fid.close()
-
 
 def conver_bin_file_cloudPoint(directoryPath):
     ## setting up the output directory
-    folder = "output"
-    path = os.path.join( os.getcwd() , folder )
+    folder = "las_format_files"
 
-    if not os.path.exists(os.path.dirname(path)):
+    path = os.path.join(directoryPath,folder)
+    if not os.path.exists(path):
         os.makedirs(path)
     else:
         shutil.rmtree(path)
@@ -385,26 +355,31 @@ def conver_bin_file_cloudPoint(directoryPath):
     entries = Path(directoryPath)
     for entry in entries.iterdir():
         #print(entry.name)
-        path = directoryPath+"/"+entry.name
+        kitti_lidar_file = directoryPath+"/"+entry.name
 
-        # print(path)
-
-        bin_pcd = np.fromfile(path, dtype=np.float32)
+        bin_pcd = np.fromfile(kitti_lidar_file, dtype=np.float32)
 
         #Reshape and drop reflection values
-        points = bin_pcd.reshape((-1, 4))[:, 0:3]
+        # points = bin_pcd.reshape((-1, 4))[:, 0:3]
 
         #Reshape and include the reflection values
-        points = bin_pcd.reshape((-1, 4))[:, 0:3]
+        lidar_points = bin_pcd.reshape((-1, 4))[:, 0:4]
+        # lidar_itensity = lidar_points[:,3:]
+        # lidar_xy = lidar_points[:,0:3]
 
         # Convert to Open3D point cloud
-        o3d_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
+        # o3d_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(lidar_points[:,0:3]))
+        # o3d_pcd.colors = np.array(lidar_points[:,3:])
+
 
         name,_ = entry.name.split(".")
-        file_path = "/media/ammar/eecs_ammar/Kitti/2011_09_26/2011_09_26_drive_0009_sync/velodyne_points/"+"output/"+name+".ply"
-        print(path)
-        print(name)
-        o3d.io.write_point_cloud(file_path, o3d_pcd)
+        file_path = path+"/"+name
+
+        write_las(file_path, lidar_points)
+
+        # write_ply(file_path, lidar_points[:, 0:3], lidar_points[:, 3:])
+
+        # o3d.io.write_point_cloud(file_path, o3d_pcd)
 
 
 def visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map, rgbd = None,withOutRGBD =False):
@@ -454,6 +429,39 @@ def visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map, rgbd = None,w
     plt.savefig('3D_scene_images.png')
 
 
+def write_pointcloud(filename,xyz_points,rgb_points=None):
+
+    """ creates a .pkl file of the point clouds generated
+
+    """
+
+    assert xyz_points.shape[1] == 3,'Input XYZ points should be Nx3 float array'
+    if rgb_points is None:
+        rgb_points = np.ones(xyz_points.shape).astype(np.uint8)*255
+    assert xyz_points.shape == rgb_points.shape,'Input RGB colors should be Nx3 float array and have same size as input XYZ points'
+
+    # Write header of .ply file
+    fid = open(filename,'wb')
+    fid.write(bytes('ply\n', 'utf-8'))
+    fid.write(bytes('format binary_little_endian 1.0\n', 'utf-8'))
+    fid.write(bytes('element vertex %d\n'%xyz_points.shape[0], 'utf-8'))
+    fid.write(bytes('property float x\n', 'utf-8'))
+    fid.write(bytes('property float y\n', 'utf-8'))
+    fid.write(bytes('property float z\n', 'utf-8'))
+    fid.write(bytes('property uchar red\n', 'utf-8'))
+    fid.write(bytes('property uchar green\n', 'utf-8'))
+    fid.write(bytes('property uchar blue\n', 'utf-8'))
+    fid.write(bytes('end_header\n', 'utf-8'))
+
+    # Write 3D points to .ply file
+    for i in range(xyz_points.shape[0]):
+        fid.write(bytearray(struct.pack("fffccc",xyz_points[i,0],xyz_points[i,1],xyz_points[i,2],
+                                        rgb_points[i,0].tostring(),rgb_points[i,1].tostring(),
+                                        rgb_points[i,2].tostring())))
+    fid.close()
+
+
+
 def write_ply(fn, verts, colors):
     ply_header = '''ply
     format ascii 1.0
@@ -470,9 +478,61 @@ def write_ply(fn, verts, colors):
     verts = verts.reshape(-1, 3)
     colors = colors.reshape(-1, 3)
     verts = np.hstack([verts, colors])
-    with open(fn, 'wb') as f:
+    with open(fn+".ply", 'wb') as f:
         f.write((ply_header % dict(vert_num=len(verts))).encode('utf-8'))
         np.savetxt(f, verts, fmt='%f %f %f %d %d %d ')
+
+
+def write_las(fn,cloudpoints,rgb_points=None):
+
+    hdr = laspy.header.Header(file_version=1.4, point_format=7)
+    outfile = laspy.file.File(fn+".las", mode="w", header = hdr)
+
+
+
+    # assert cloudpoints.shape[1] == 3,'Input XYZ points should be Nx3 float array'
+    # if rgb_points is None:
+    #     rgb_points = np.ascontiguousarray( np.ones(cloudpoints.shape).astype(np.uint8)*255 )
+    # assert cloudpoints.shape == rgb_points.shape,'Input RGB colors should be Nx3 float array and have same size as input XYZ points'
+
+    # xyz = np.ascontiguousarray(rawinput[:, 0:3], dtype=’float32′)
+    # rgb = np.ascontiguousarray(raw[:, 4:7], dtype=’uint8′) *256     # the lidar doest has rgb hence omiited
+    # i = np.ascontiguousarray(rawinput[:, 3], dtype=’float32′) *256   # un-normalize that data
+
+    xyz = np.ascontiguousarray(cloudpoints[:,0:3], dtype='float32')
+    i = np.ascontiguousarray(cloudpoints[:,3], dtype='float32') *256  # un-normalize that data
+    i = np.squeeze(i)
+
+
+
+    # outfile.x = xyz[:, 0]
+    # outfile.y = xyz[:, 1]
+    # outfile.z = xyz[:, 2]
+    # # outfile.Red = rgb_points[:, 0]
+    # # outfile.Green = rgb_points[:, 1]
+    # # outfile.Blue = rgb_points[:, 2]
+    # outfile.Intensity = i
+    # # outfile.classification = labels
+    # outfile.close()
+
+
+
+    xmin = np.floor(np.min(xyz[:, 0]))
+    ymin = np.floor(np.min(xyz[:, 1]))
+    zmin = np.floor(np.min(xyz[:, 2]))
+    imin = np.floor(np.min(i))
+    imax = np.max(i)
+
+    outfile.header.offset = [xmin, ymin, zmin,imin]
+    outfile.header.scale = [0.001, 0.001, 0.001,0.001]
+
+    outfile.x =  xyz[:, 0]
+    outfile.y = xyz[:, 1]
+    outfile.z = xyz[:, 2]
+    outfile.intensity = i
+
+    outfile.close()
+
 
 def cv_pointcloud_from_stereo(dataset,frameNumber):
 
