@@ -28,7 +28,7 @@ frameNumber = 75
 sence = 0
 objects = dataset.get_frame_Lable_tracks(sence,frameNumber)
 
-pc_velo = dataset.get_lidar(sence)
+pc_velo = dataset.get_lidar(sence,frameNumber)
 calib = dataset.get_calibration(sence)
 
 img_left = dataset.get_image_Left(sence,frameNumber)
