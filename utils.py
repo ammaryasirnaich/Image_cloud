@@ -180,11 +180,6 @@ def velo_2_img_projection(points):
         return ans, c_
 
 
-
-
-
-
-
 # set stereo Settings
 def stereo_setting_disparity():
         
@@ -340,22 +335,21 @@ def pointcloud_from_StereoImage_kitti(frameNumber,dataset):
     return pcd
 
 
-def conver_bin_file_cloudPoint(directoryPath):
+def conver_bin_file_cloudPoint(sourcePath, destination_path,formatType='LAS'):
     ## setting up the output directory
-    folder = "las_format_files"
+    folder = "converted_pointcloud_files"
 
-    path = os.path.join(directoryPath,folder)
-    if not os.path.exists(path):
-        os.makedirs(path)
+    dest_path = os.path.join(destination_path, folder)
+    if not os.path.exists(dest_path):
+        os.makedirs(dest_path)
     else:
-        shutil.rmtree(path)
-        os.makedirs(path)
+        shutil.rmtree(dest_path)
+        os.makedirs(dest_path)
 
-
-    entries = Path(directoryPath)
+    entries = Path(sourcePath)
     for entry in entries.iterdir():
         #print(entry.name)
-        kitti_lidar_file = directoryPath+"/"+entry.name
+        kitti_lidar_file = sourcePath + "/" + entry.name
 
         bin_pcd = np.fromfile(kitti_lidar_file, dtype=np.float32)
 
@@ -367,19 +361,23 @@ def conver_bin_file_cloudPoint(directoryPath):
         # lidar_itensity = lidar_points[:,3:]
         # lidar_xy = lidar_points[:,0:3]
 
-        # Convert to Open3D point cloud
-        # o3d_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(lidar_points[:,0:3]))
-        # o3d_pcd.colors = np.array(lidar_points[:,3:])
-
-
         name,_ = entry.name.split(".")
-        file_path = path+"/"+name
+        write_file_path = dest_path+"/"+name
 
-        write_las(file_path, lidar_points)
-
-        # write_ply(file_path, lidar_points[:, 0:3], lidar_points[:, 3:])
-
-        # o3d.io.write_point_cloud(file_path, o3d_pcd)
+        if(formatType =='LAS'):
+            write_las(write_file_path, lidar_points)
+        elif(formatType =='PLY'):
+            write_ply(write_file_path, lidar_points[:, 0:3], lidar_points[:, 3:])
+        else:
+            # Convert to Open3D point cloud
+            o3d_pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(lidar_points[:,0:3]))
+            intensity = np.zeros((np.size(lidar_points[:,3:]), 3))
+            intensity[:, 0] = np.reshape( lidar_points[:,3:], -1)
+            intensity[:, 1] = np.reshape( lidar_points[:,3:], -1)
+            intensity[:, 2] = np.reshape( lidar_points[:,3:], -1)
+            o3d_pcd.colors = o3d.utility.Vector3dVector(intensity)
+            # o3d_pcd.colors = np.array(lidar_points[:,3:])
+            o3d.io.write_point_cloud(write_file_path+'.pcd', o3d_pcd)
 
 
 def visualize(img_left_rgb,img_right_rgb,disparaity_map,depth_map, rgbd = None,withOutRGBD =False):
@@ -487,8 +485,6 @@ def write_las(fn,cloudpoints,rgb_points=None):
 
     hdr = laspy.header.Header(file_version=1.4, point_format=7)
     outfile = laspy.file.File(fn+".las", mode="w", header = hdr)
-
-
 
     # assert cloudpoints.shape[1] == 3,'Input XYZ points should be Nx3 float array'
     # if rgb_points is None:

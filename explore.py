@@ -36,7 +36,7 @@ def main():
     save_result_directory = date + "_" + drive + "_stereo_cloud"
     path = os.path.join(os.getcwd(), save_result_directory)
     directoryPath = "/media/ammar/eecs_ammar/Kitti/2011_09_26/2011_09_26_drive_0009_sync/velodyne_points/data"
-    utils.conver_bin_file_cloudPoint(directoryPath)
+    utils.conver_bin_file_cloudPoint(directoryPath,"/media/ammar/eecs_ammar/Kitti/2011_09_26","PCD")
 
 
     ## use the "opencv" or "open3d" library to generate pointcloud data
